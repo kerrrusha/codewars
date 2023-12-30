@@ -15,6 +15,10 @@ class ScreenLockingPatternsTest {
         assertEquals(1, sl.calculateCombinations('B',1));
         assertEquals(5, sl.calculateCombinations('C',2));
         assertEquals(8, sl.calculateCombinations('E',2));
+    }
+
+    @Test
+    public void length4_ok() {
         assertEquals(256, sl.calculateCombinations('E',4));
     }
 }

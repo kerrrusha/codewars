@@ -134,7 +134,19 @@ public class ScreenLockingPatterns {
         throw new RuntimeException("Can't find letter in lock pattern: " + letter);
     }
 
-    private record Vector2(int first, int second) {
+    private static class Vector2 {
+        private final int first;
+        private final int second;
+
+        private Vector2(int first, int second) {
+            this.first = first;
+            this.second = second;
+        }
+
+        @Override
+        public String toString() {
+            return "{" + first + ", " + second + "}";
+        }
     }
 
     private static class Pattern implements Cloneable {
@@ -180,6 +192,11 @@ public class ScreenLockingPatterns {
         @Override
         public Pattern clone() {
             return new Pattern(this);
+        }
+
+        @Override
+        public String toString() {
+            return Arrays.toString(pattern);
         }
     }
 }
