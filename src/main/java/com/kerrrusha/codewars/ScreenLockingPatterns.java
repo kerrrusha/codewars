@@ -66,6 +66,7 @@ public class ScreenLockingPatterns {
         return result;
     }
 
+    // todo over point
     private List<Vector2> getNeighboursStraightPositions(Pattern pattern) {
         Vector2 currentPosition = pattern.getLastPosition();
         return Stream.of(
@@ -81,15 +82,34 @@ public class ScreenLockingPatterns {
 
     private List<Vector2> getNeighboursDiagonalPositions(Pattern pattern) {
         Vector2 currentPosition = pattern.getLastPosition();
-        return Stream.of(
-                        new Vector2(currentPosition.first + 1, currentPosition.second + 1),
-                        new Vector2(currentPosition.first + 1, currentPosition.second - 1),
-                        new Vector2(currentPosition.first - 1, currentPosition.second + 1),
-                        new Vector2(currentPosition.first - 1, currentPosition.second - 1)
+        Stream<Vector2> possiblePositions = isCornerPosition(currentPosition) && centralPositionIsUsed(pattern)
+                ? Stream.of(
+                        new Vector2(currentPosition.first + 2, currentPosition.second + 2),
+                        new Vector2(currentPosition.first + 2, currentPosition.second - 2),
+                        new Vector2(currentPosition.first - 2, currentPosition.second + 2),
+                        new Vector2(currentPosition.first - 2, currentPosition.second - 2)
                 )
+                : Stream.of(
+                new Vector2(currentPosition.first + 1, currentPosition.second + 1),
+                new Vector2(currentPosition.first + 1, currentPosition.second - 1),
+                new Vector2(currentPosition.first - 1, currentPosition.second + 1),
+                new Vector2(currentPosition.first - 1, currentPosition.second - 1)
+                );
+        return possiblePositions
                 .filter(this::positionIsValid)
                 .filter(ij -> positionIsNotUsed(ij, pattern))
                 .collect(Collectors.toList());
+    }
+
+    private boolean isCornerPosition(Vector2 position) {
+        return position.first == 0 && position.second == 0 ||
+                position.first == ROWS - 1 && position.second == 0 ||
+                position.first == 0 && position.second == COLS - 1 ||
+                position.first == ROWS - 1 && position.second == COLS - 1;
+    }
+
+    private boolean centralPositionIsUsed(Pattern pattern) {
+        return pattern.contains(new Vector2(ROWS / 2, COLS / 2));
     }
 
     private List<Vector2> getOverpointPositions(Pattern pattern) {
@@ -147,6 +167,24 @@ public class ScreenLockingPatterns {
         public String toString() {
             return "{" + first + ", " + second + "}";
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Vector2 vector2 = (Vector2) o;
+
+            if (first != vector2.first) return false;
+            return second == vector2.second;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = first;
+            result = 31 * result + second;
+            return result;
+        }
     }
 
     private static class Pattern implements Cloneable {
@@ -169,6 +207,15 @@ public class ScreenLockingPatterns {
 
         private Vector2 get(int index) {
             return pattern[index];
+        }
+
+        private boolean contains(Vector2 position) {
+            for (Vector2 patternPosition : pattern) {
+                if (patternPosition.equals(position)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private Vector2 getLastPosition() {
