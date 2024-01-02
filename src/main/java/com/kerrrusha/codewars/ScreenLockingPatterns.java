@@ -5,8 +5,9 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static java.util.stream.Collectors.toList;
 
 public class ScreenLockingPatterns {
     private static final int ROWS = 3;
@@ -16,6 +17,18 @@ public class ScreenLockingPatterns {
             {'D', 'E', 'F'},
             {'G', 'H', 'I'},
     };
+    private static final List<Vector2> STRAIGHT_DELTAS = List.of(
+            new Vector2(0, 1),
+            new Vector2(0, -1),
+            new Vector2(1, 0),
+            new Vector2(-1, 0)
+    );
+    private static final List<Vector2> DIAGONAL_DELTAS = List.of(
+            new Vector2(1, 1),
+            new Vector2(1, -1),
+            new Vector2(-1, 1),
+            new Vector2(-1, -1)
+    );
 
     public int calculateCombinations(char startPosition, int patternLength) {
         if (patternLength <= 0 || patternLength > 9) {
@@ -66,39 +79,33 @@ public class ScreenLockingPatterns {
         return result;
     }
 
-    // todo over point
     private List<Vector2> getNeighboursStraightPositions(Pattern pattern) {
         Vector2 currentPosition = pattern.getLastPosition();
-        return Stream.of(
-                new Vector2(currentPosition.first, currentPosition.second + 1),
-                new Vector2(currentPosition.first, currentPosition.second - 1),
-                new Vector2(currentPosition.first + 1, currentPosition.second),
-                new Vector2(currentPosition.first - 1, currentPosition.second)
-        )
+        return STRAIGHT_DELTAS.stream()
+                .filter(delta -> positionIsValid(applyDeltaToPosition(currentPosition, delta)))
+                .map(delta -> {
+                    Vector2 closestPosition = applyDeltaToPosition(currentPosition, delta);
+                    return positionIsNotUsed(closestPosition, pattern)
+                            ? closestPosition
+                            : applyDeltaToPosition(currentPosition, delta.createDoubled());
+                })
                 .filter(this::positionIsValid)
-                .filter(ij -> positionIsNotUsed(ij, pattern))
-                .collect(Collectors.toList());
+                .filter(position -> positionIsNotUsed(position, pattern))
+                .collect(toList());
+    }
+
+    private Vector2 applyDeltaToPosition(Vector2 position, Vector2 delta) {
+        return new Vector2(position.first + delta.first, position.second + delta.second);
     }
 
     private List<Vector2> getNeighboursDiagonalPositions(Pattern pattern) {
         Vector2 currentPosition = pattern.getLastPosition();
-        Stream<Vector2> possiblePositions = isCornerPosition(currentPosition) && centralPositionIsUsed(pattern)
-                ? Stream.of(
-                        new Vector2(currentPosition.first + 2, currentPosition.second + 2),
-                        new Vector2(currentPosition.first + 2, currentPosition.second - 2),
-                        new Vector2(currentPosition.first - 2, currentPosition.second + 2),
-                        new Vector2(currentPosition.first - 2, currentPosition.second - 2)
-                )
-                : Stream.of(
-                new Vector2(currentPosition.first + 1, currentPosition.second + 1),
-                new Vector2(currentPosition.first + 1, currentPosition.second - 1),
-                new Vector2(currentPosition.first - 1, currentPosition.second + 1),
-                new Vector2(currentPosition.first - 1, currentPosition.second - 1)
-                );
-        return possiblePositions
+        return DIAGONAL_DELTAS.stream()
+                .map(delta -> isCornerPosition(currentPosition) && centralPositionIsUsed(pattern) ? delta.createDoubled() : delta)
+                .map(delta -> applyDeltaToPosition(currentPosition, delta))
                 .filter(this::positionIsValid)
                 .filter(ij -> positionIsNotUsed(ij, pattern))
-                .collect(Collectors.toList());
+                .collect(toList());
     }
 
     private boolean isCornerPosition(Vector2 position) {
@@ -126,7 +133,7 @@ public class ScreenLockingPatterns {
                 )
                 .filter(this::positionIsValid)
                 .filter(ij -> positionIsNotUsed(ij, pattern))
-                .collect(Collectors.toList());
+                .collect(toList());
     }
 
     private boolean positionIsValid(Vector2 ij) {
@@ -154,13 +161,9 @@ public class ScreenLockingPatterns {
         throw new RuntimeException("Can't find letter in lock pattern: " + letter);
     }
 
-    private static class Vector2 {
-        private final int first;
-        private final int second;
-
-        private Vector2(int first, int second) {
-            this.first = first;
-            this.second = second;
+    private record Vector2(int first, int second) {
+        private Vector2 createDoubled() {
+            return new Vector2(first * 2, second * 2);
         }
 
         @Override
@@ -177,13 +180,6 @@ public class ScreenLockingPatterns {
 
             if (first != vector2.first) return false;
             return second == vector2.second;
-        }
-
-        @Override
-        public int hashCode() {
-            int result = first;
-            result = 31 * result + second;
-            return result;
         }
     }
 
@@ -244,6 +240,21 @@ public class ScreenLockingPatterns {
         @Override
         public String toString() {
             return Arrays.toString(pattern);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            Pattern pattern1 = (Pattern) o;
+
+            return Arrays.equals(pattern, pattern1.pattern);
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(pattern);
         }
     }
 }
