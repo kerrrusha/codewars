@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
 
@@ -28,6 +28,16 @@ public class ScreenLockingPatterns {
             new Vector2(1, -1),
             new Vector2(-1, 1),
             new Vector2(-1, -1)
+    );
+    private static final List<Vector2> OVERPOINT_DELTAS = List.of(
+            new Vector2(1, 2),
+            new Vector2(1, -2),
+            new Vector2(-1, 2),
+            new Vector2(-1, -2),
+            new Vector2(2, 1),
+            new Vector2(2, -1),
+            new Vector2(-2, 1),
+            new Vector2(-2, -1)
     );
 
     public int calculateCombinations(char startPosition, int patternLength) {
@@ -120,17 +130,8 @@ public class ScreenLockingPatterns {
     }
 
     private List<Vector2> getOverpointPositions(Pattern pattern) {
-        Vector2 currentPosition = pattern.getLastPosition();
-        return Stream.of(
-                        new Vector2(currentPosition.first + 1, currentPosition.second + 2),
-                        new Vector2(currentPosition.first + 1, currentPosition.second - 2),
-                        new Vector2(currentPosition.first - 1, currentPosition.second + 2),
-                        new Vector2(currentPosition.first - 1, currentPosition.second - 2),
-                        new Vector2(currentPosition.first + 2, currentPosition.second + 1),
-                        new Vector2(currentPosition.first + 2, currentPosition.second - 1),
-                        new Vector2(currentPosition.first - 2, currentPosition.second + 1),
-                        new Vector2(currentPosition.first - 2, currentPosition.second - 1)
-                )
+        return OVERPOINT_DELTAS.stream()
+                .map(delta -> applyDeltaToPosition(pattern.getLastPosition(), delta))
                 .filter(this::positionIsValid)
                 .filter(ij -> positionIsNotUsed(ij, pattern))
                 .collect(toList());
@@ -207,7 +208,7 @@ public class ScreenLockingPatterns {
 
         private boolean contains(Vector2 position) {
             for (Vector2 patternPosition : pattern) {
-                if (patternPosition.equals(position)) {
+                if (Objects.equals(patternPosition, position)) {
                     return true;
                 }
             }
