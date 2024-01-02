@@ -4,15 +4,8 @@ import java.util.*;
 import java.util.stream.*;
 
 public class ObservedPin {
-
-    public static void main(String[] args) {
-        List<String> pins = getPINs("10");
-        System.out.println(pins);
-    }
-
-    static final char EMPTY_CHAR = '-';
-
-    static final char[][] KEYPAD = {
+    private static final char EMPTY_CHAR = '-';
+    private static final char[][] KEYPAD = {
             {'1', '2', '3'},
             {'4', '5', '6'},
             {'7', '8', '9'},
@@ -27,8 +20,7 @@ public class ObservedPin {
 
         int resultSize = getResultSize(adjacent);
         String[] result = createStringArray(resultSize);
-        for (int i = 0; i < adjacent.length; i++) {
-            char[] adjacentDigits = adjacent[i];
+        for (char[] adjacentDigits : adjacent) {
             final int adjacentDigitsAmount = adjacentDigits.length;
             int repeats = resultSize / adjacentDigitsAmount;
 
