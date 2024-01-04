@@ -10,22 +10,41 @@ import java.util.regex.Pattern;
 public class MathEvaluator {
     private static final String WHITESPACE = " ";
     private static final Pattern NUMBER_PATTERN = Pattern.compile("-?(\\d+(\\.\\d+)?)");
+    private static final List<Operation> PRIORITIZED_OPERATIONS = List.of(Operation.MULTIPLY, Operation.DIVIDE);
 
     public double calculate(String expression) {
         List<Vector2> numberIndexes = getNumberIndexes(expression);
         List<Vector2> nonNumberIndexes = toNonNumberIndexes(numberIndexes, expression);
         List<Vector2> allElementIndexes = union(numberIndexes, nonNumberIndexes);
         List<Object> parsed = parse(expression, allElementIndexes, numberIndexes, nonNumberIndexes);
+        List<Integer> prioritizedOperationsIndexes = getPrioritizedOperationsIndexes(parsed);
+
         if (parsed.size() == 1) {
             return (double) parsed.get(0);
         }
+
         double result = 0;
+        for (int operationIndex : prioritizedOperationsIndexes) {
+            Operation operation = (Operation) parsed.get(operationIndex);
+            double leftOperand = (double) parsed.get(operationIndex - 1);
+            double rightOperand = (double) parsed.get(operationIndex + 1);
+            result += operation.apply(leftOperand, rightOperand);
+        }
+        return result;
+    }
+
+    private List<Integer> getPrioritizedOperationsIndexes(List<Object> parsed) {
+        List<Integer> result = new ArrayList<>();
         for (Object element : parsed) {
-            if (element instanceof Operation operation) {
+            if (element instanceof Operation operation && PRIORITIZED_OPERATIONS.contains(operation)) {
                 int operationIndex = parsed.indexOf(element);
-                double leftOperand = (double) parsed.get(operationIndex - 1);
-                double rightOperand = (double) parsed.get(operationIndex + 1);
-                result += operation.apply(leftOperand, rightOperand);
+                result.add(operationIndex);
+            }
+        }
+        for (Object element : parsed) {
+            if (element instanceof Operation operation && !PRIORITIZED_OPERATIONS.contains(operation)) {
+                int operationIndex = parsed.indexOf(element);
+                result.add(operationIndex);
             }
         }
         return result;
