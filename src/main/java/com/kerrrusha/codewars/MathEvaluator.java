@@ -16,7 +16,9 @@ public class MathEvaluator {
         List<Vector2> nonNumberIndexes = toNonNumberIndexes(numberIndexes, expression);
         List<Vector2> allElementIndexes = union(numberIndexes, nonNumberIndexes);
         List<Object> parsed = parse(expression, allElementIndexes, numberIndexes, nonNumberIndexes);
-
+        if (parsed.size() == 1) {
+            return (double) parsed.get(0);
+        }
         double result = 0;
         for (Object element : parsed) {
             if (element instanceof Operation operation) {
