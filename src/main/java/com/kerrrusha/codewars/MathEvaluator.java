@@ -10,14 +10,22 @@ import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.lang.Math.min;
+
 public class MathEvaluator {
     private static final String WHITESPACE = " ";
     private static final char OPENING_PARENTHESE_SYMBOL = '(';
     private static final char CLOSING_PARENTHESE_SYMBOL = ')';
+    private static final char MULTIPLY_SYMBOL = '*';
+    private static final char DIVIDE_SYMBOL = '/';
+    private static final char ADD_SYMBOL = '+';
+    private static final char SUBTRACT_SYMBOL = '-';
     private static final Pattern NUMBER_PATTERN = Pattern.compile("-?(\\d+(\\.\\d+)?)");
-    private static final List<Operation> PRIORITIZED_OPERATIONS = List.of(Operation.MULTIPLY, Operation.DIVIDE);
+    private static final Pattern REDUNDANT_PARENTHESES_PATTERN = Pattern.compile("\\(-?(\\d+(\\.\\d+)?)\\)");
+    private static final List<Character> PRIORITIZED_OPERATIONS = List.of(MULTIPLY_SYMBOL, DIVIDE_SYMBOL);
     
     public double calculate(String expression) {
+        expression = simplify(expression);
         List<Object> parsed = parse(expression);
 
         if (parsed.size() == 1) {
@@ -25,7 +33,7 @@ public class MathEvaluator {
         }
 
         Queue<Integer> prioritizedOperationsIndexes = getPrioritizedOperationsIndexes(parsed);
-        while(!prioritizedOperationsIndexes.isEmpty()) {
+        while (!prioritizedOperationsIndexes.isEmpty()) {
             int operationIndex = prioritizedOperationsIndexes.poll();
             Operation operation = (Operation) parsed.get(operationIndex);
 
@@ -37,6 +45,18 @@ public class MathEvaluator {
             prioritizedOperationsIndexes = getPrioritizedOperationsIndexes(parsed);
         }
         return toResult(parsed);
+    }
+
+    private String simplify(String expression) {
+        StringBuilder result = new StringBuilder(expression);
+        Matcher matcher = REDUNDANT_PARENTHESES_PATTERN.matcher(expression);
+        while (matcher.find()) {
+            MatchResult matchResult = matcher.toMatchResult();
+
+            result.replace(matchResult.start(), matchResult.start() + 1, WHITESPACE);
+            result.replace(matchResult.end(), matchResult.end() + 1, WHITESPACE);
+        }
+        return result.toString();
     }
 
     private double toResult(List<Object> parsed) {
@@ -52,6 +72,8 @@ public class MathEvaluator {
 
         remove(parsed, firstElementIndex, elementsToRemove);
         parsed.add(firstElementIndex, result);
+
+        fixUnwiredOperations(parsed);
     }
 
     private void remove(List<Object> parsed, int removeFromIndex, double repeatAmount) {
@@ -62,13 +84,31 @@ public class MathEvaluator {
 
     private int getElementsToRemove(List<Object> parsed, int middleElementIndex) {
         final int defaultElementsToRemove = 3;
-        final int maxElementsToRemove = 5;
 
-        if (parsed.size() < maxElementsToRemove) {
+        if (middleElementIndex - 2 < 0 || middleElementIndex + 2 >= parsed.size()) {
             return defaultElementsToRemove;
         }
-        if (parsed.get(middleElementIndex - 2) instanceof Parenthese) {
-            return maxElementsToRemove;
+        if (parsed.get(middleElementIndex - 2) instanceof OpeningParenthese
+                && parsed.get(middleElementIndex + 2) instanceof ClosingParenthese) {
+            int paranthesesOnTheLeft = 1;
+            for (int i = middleElementIndex - 3; i >= 0; i--) {
+                if (parsed.get(i) instanceof OpeningParenthese) {
+                    paranthesesOnTheLeft++;
+                    continue;
+                }
+                break;
+            }
+
+            int paranthesesOnTheRight = 1;
+            for (int i = middleElementIndex + 3; i < parsed.size(); i++) {
+                if (parsed.get(i) instanceof ClosingParenthese) {
+                    paranthesesOnTheRight++;
+                    continue;
+                }
+                break;
+            }
+
+            return 2 * min(paranthesesOnTheLeft, paranthesesOnTheRight) + defaultElementsToRemove;
         }
         return defaultElementsToRemove;
     }
@@ -80,7 +120,11 @@ public class MathEvaluator {
         while (!parentheseGroupsOrder.isEmpty()) {
             Vector2 parentheseGroup = parentheseGroupsOrder.poll();
             Queue<Integer> operationIndexes = getPrioritizedOperationsIndexesInRange(parsed, parentheseGroup);
-            result.addAll(operationIndexes);
+            operationIndexes.forEach(index -> {
+                if (!result.contains(index)){
+                    result.add(index);
+                }
+            });
         }
 
         return result;
@@ -91,14 +135,14 @@ public class MathEvaluator {
 
         for (int i = parentheseGroup.first; i < parentheseGroup.second; i++) {
             Object element = parsed.get(i);
-            if (element instanceof Operation operation && PRIORITIZED_OPERATIONS.contains(operation)) {
+            if (element instanceof Operation operation && PRIORITIZED_OPERATIONS.contains(operation.getSymbol())) {
                 int operationIndex = parsed.indexOf(element);
                 result.add(operationIndex);
             }
         }
         for (int i = parentheseGroup.first; i < parentheseGroup.second; i++) {
             Object element = parsed.get(i);
-            if (element instanceof Operation operation && !PRIORITIZED_OPERATIONS.contains(operation)) {
+            if (element instanceof Operation operation && !PRIORITIZED_OPERATIONS.contains(operation.getSymbol())) {
                 int operationIndex = parsed.indexOf(element);
                 result.add(operationIndex);
             }
@@ -140,6 +184,11 @@ public class MathEvaluator {
     private Queue<Vector2> getNonParentheseGroups(Deque<Vector2> parentheseGroupsOrder, List<Object> parsed) {
         Queue<Vector2> result = new LinkedList<>();
 
+        if (parentheseGroupsOrder.isEmpty()) {
+            result.add(new Vector2(0, parsed.size()));
+            return result;
+        }
+
         Vector2 lastGroup = parentheseGroupsOrder.getLast();
         if (lastGroup.first > 0) {
             result.add(new Vector2(0, lastGroup.first));
@@ -179,13 +228,26 @@ public class MathEvaluator {
                 result.addAll(tryParseNonNumberElements(raw));
             }
         }
+
+        fixUnwiredOperations(result);
         return result;
+    }
+
+    private void fixUnwiredOperations(List<Object> parsed) {
+        for (int i = 0; i < parsed.size() - 1; i++) {
+            if (parsed.get(i) instanceof Operation && parsed.get(i + 1) instanceof SubtractOperation) {
+                parsed.set(i + 1, new OpeningParenthese());
+                parsed.add(i + 3, new ClosingParenthese());
+                parsed.add(i + 2, new MultiplyOperation());
+                parsed.add(i + 2, -1d);
+            }
+        }
     }
 
     private List<Object> tryParseNonNumberElements(String raw) {
         return Arrays.stream(raw.replace(WHITESPACE, "").chars().toArray())
                 .mapToObj(e -> (char) e)
-                .map(ch -> Operation.validChar(ch) ? Operation.parseChar(ch) : Parenthese.parse(ch))
+                .map(ch -> Operation.validChar(ch) ? Operation.parse(ch) : Parenthese.parse(ch))
                 .toList();
     }
 
@@ -264,39 +326,96 @@ public class MathEvaluator {
         }
     }
 
-    private enum Operation {
-        MULTIPLY('*'),
-        DIVIDE('/'),
-        ADD('+'),
-        SUBTRACT('-');
+    private interface Operation {
+        char getSymbol();
 
-        private final char symbol;
-
-        Operation(char symbol) {
-            this.symbol = symbol;
-        }
-
-        double apply(double leftOperand, double rightOperand) {
-            return switch (this) {
-                case MULTIPLY -> leftOperand * rightOperand;
-                case DIVIDE -> leftOperand / rightOperand;
-                case ADD -> leftOperand + rightOperand;
-                case SUBTRACT -> leftOperand - rightOperand;
-            };
-        }
+        double apply(double leftOperand, double rightOperand);
 
         static boolean validChar(char charToCheck) {
-            return Arrays.stream(values())
-                    .map(e -> e.symbol)
-                    .filter(ch -> ch == charToCheck)
-                    .count() == 1;
+            return List.of(
+                    MULTIPLY_SYMBOL,
+                    DIVIDE_SYMBOL,
+                    ADD_SYMBOL,
+                    SUBTRACT_SYMBOL
+            ).contains(charToCheck);
         }
 
-        static Operation parseChar(char symbol) {
-            return Arrays.stream(values())
-                    .filter(e -> e.symbol == symbol)
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("Such Operation does not exists: " + symbol));
+        static Operation parse(char symbol) {
+            return switch (symbol) {
+                case MULTIPLY_SYMBOL -> new MultiplyOperation();
+                case DIVIDE_SYMBOL -> new DivideOperation();
+                case ADD_SYMBOL -> new AddOperation();
+                case SUBTRACT_SYMBOL -> new SubtractOperation();
+                default -> throw new IllegalStateException("Unexpected value: " + symbol);
+            };
+        }
+    }
+
+    private static class MultiplyOperation implements Operation {
+        @Override
+        public char getSymbol() {
+            return MULTIPLY_SYMBOL;
+        }
+
+        @Override
+        public double apply(double leftOperand, double rightOperand) {
+            return leftOperand * rightOperand;
+        }
+
+        @Override
+        public String toString() {
+            return "" + getSymbol();
+        }
+    }
+
+    private static class DivideOperation implements Operation {
+        @Override
+        public char getSymbol() {
+            return DIVIDE_SYMBOL;
+        }
+
+        @Override
+        public double apply(double leftOperand, double rightOperand) {
+            return leftOperand / rightOperand;
+        }
+
+        @Override
+        public String toString() {
+            return "" + getSymbol();
+        }
+    }
+
+    private static class AddOperation implements Operation {
+        @Override
+        public char getSymbol() {
+            return ADD_SYMBOL;
+        }
+
+        @Override
+        public double apply(double leftOperand, double rightOperand) {
+            return leftOperand + rightOperand;
+        }
+
+        @Override
+        public String toString() {
+            return "" + getSymbol();
+        }
+    }
+
+    private static class SubtractOperation implements Operation {
+        @Override
+        public char getSymbol() {
+            return SUBTRACT_SYMBOL;
+        }
+
+        @Override
+        public double apply(double leftOperand, double rightOperand) {
+            return leftOperand - rightOperand;
+        }
+
+        @Override
+        public String toString() {
+            return "" + getSymbol();
         }
     }
 
