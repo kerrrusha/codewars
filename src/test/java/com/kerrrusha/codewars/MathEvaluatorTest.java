@@ -11,6 +11,36 @@ class MathEvaluatorTest {
     }
 
     @Test
+    public void test1() {
+        assertEquals(3, new MathEvaluator().calculate("2 - -(1)"), 0.01);
+    }
+
+    @Test
+    public void test2() {
+        assertEquals(61, new MathEvaluator().calculate("(80 + -19)"), 0.01);
+    }
+
+    @Test
+    public void test3() {
+        assertEquals(3, new MathEvaluator().calculate("(1 - 2) + -(-(-(-4)))"), 0.01);
+    }
+
+    @Test
+    public void test4() {
+        assertEquals(1, new MathEvaluator().calculate("2 - (1)"), 0.01);
+    }
+
+    @Test
+    public void test5() {
+        assertEquals(-492, new MathEvaluator().calculate("12* 123/(-5 + 2)"), 0.01);
+    }
+
+    @Test
+    public void test6() {
+        assertEquals(492, new MathEvaluator().calculate("12* 123/-(-5 + 2)"), 0.01);
+    }
+
+    @Test
     public void testHard() {
         assertEquals(1, new MathEvaluator().calculate("(123.45*(678.90 / (-2.5+ 11.5)-(((80 -(19))) *33.25)) / 20) - (123.45*(678.90 / (-2.5+ 11.5)-(((80 -(19))) *33.25)) / 20) + (13 - 2)/ -(-11) "), 0.01);
     }

@@ -21,11 +21,9 @@ public class MathEvaluator {
     private static final char ADD_SYMBOL = '+';
     private static final char SUBTRACT_SYMBOL = '-';
     private static final Pattern NUMBER_PATTERN = Pattern.compile("-?(\\d+(\\.\\d+)?)");
-    private static final Pattern REDUNDANT_PARENTHESES_PATTERN = Pattern.compile("\\(-?(\\d+(\\.\\d+)?)\\)");
     private static final List<Character> PRIORITIZED_OPERATIONS = List.of(MULTIPLY_SYMBOL, DIVIDE_SYMBOL);
     
     public double calculate(String expression) {
-        expression = simplify(expression);
         List<Object> parsed = parse(expression);
 
         if (parsed.size() == 1) {
@@ -47,21 +45,9 @@ public class MathEvaluator {
         return toResult(parsed);
     }
 
-    private String simplify(String expression) {
-        StringBuilder result = new StringBuilder(expression);
-        Matcher matcher = REDUNDANT_PARENTHESES_PATTERN.matcher(expression);
-        while (matcher.find()) {
-            MatchResult matchResult = matcher.toMatchResult();
-
-            result.replace(matchResult.start(), matchResult.start() + 1, WHITESPACE);
-            result.replace(matchResult.end(), matchResult.end() + 1, WHITESPACE);
-        }
-        return result.toString();
-    }
-
     private double toResult(List<Object> parsed) {
         if (parsed.size() != 1) {
-            throw new RuntimeException("Parsed list must contain only 1 element to extract result, but have: " + parsed.size());
+            throw new IllegalStateException("Parsed list must contain only 1 element to extract result, but have: " + parsed.size());
         }
         return (Double) parsed.get(0);
     }
@@ -235,13 +221,88 @@ public class MathEvaluator {
 
     private void fixUnwiredOperations(List<Object> parsed) {
         for (int i = 0; i < parsed.size() - 1; i++) {
-            if (parsed.get(i) instanceof Operation && parsed.get(i + 1) instanceof SubtractOperation) {
-                parsed.set(i + 1, new OpeningParenthese());
-                parsed.add(i + 3, new ClosingParenthese());
+            if (parsed.get(i) instanceof OpeningParenthese && parsed.get(i + 1) instanceof SubtractOperation) {
+                System.out.println(parsed);
+                parsed.set(i + 1, -1d);
                 parsed.add(i + 2, new MultiplyOperation());
-                parsed.add(i + 2, -1d);
+                System.out.println(parsed);
+                System.out.println();
             }
         }
+        for (int i = 0; i < parsed.size() - 1; i++) {
+            if (parsed.get(i) instanceof Double && parsed.get(i + 1) instanceof Double) {
+                System.out.println(parsed);
+                parsed.add(i + 1, new AddOperation());
+                System.out.println(parsed);
+                System.out.println();
+            }
+        }
+
+        List<Integer> indexesToRemove = new ArrayList<>();
+        for (int i = 0; i < parsed.size() - 2; i++) {
+            Object first = parsed.get(i);
+            Object second = parsed.get(i + 1);
+            Object third = parsed.get(i + 2);
+            if (first instanceof OpeningParenthese
+                    && second instanceof Double
+                    && third instanceof ClosingParenthese) {
+                indexesToRemove.add(i);
+                indexesToRemove.add(i + 2);
+            }
+        }
+        for (int i = 0; i < parsed.size() - 2; i++) {
+            Object first = parsed.get(i);
+            Object second = parsed.get(i + 1);
+            Object third = parsed.get(i + 2);
+            if (first instanceof Operation
+                    && second instanceof SubtractOperation
+                    && third instanceof Double) {
+                indexesToRemove.add(i + 1);
+                parsed.set(i + 2, -1 * (Double) parsed.get(i + 2));
+            }
+        }
+        for (int i = 0; i < parsed.size() - 1; i++) {
+            Object first = parsed.get(i);
+            Object second = parsed.get(i + 1);
+            if (first instanceof OpeningParenthese
+                    && second instanceof ClosingParenthese) {
+                indexesToRemove.add(i);
+                indexesToRemove.add(i + 1);
+            }
+        }
+
+        List<Object> result = new ArrayList<>();
+        for (int i = 0; i < parsed.size(); i++) {
+            if (indexesToRemove.contains(i)) {
+                continue;
+            }
+            result.add(parsed.get(i));
+        }
+
+        parsed.clear();
+        parsed.addAll(result);
+
+        indexesToRemove = new ArrayList<>();
+        for (int i = 0; i < parsed.size() - 1; i++) {
+            Object first = parsed.get(i);
+            Object second = parsed.get(i + 1);
+            if (first instanceof SubtractOperation
+                    && second instanceof SubtractOperation) {
+                indexesToRemove.add(i);
+                parsed.set(i + 1, new AddOperation());
+            }
+        }
+
+        result = new ArrayList<>();
+        for (int i = 0; i < parsed.size(); i++) {
+            if (indexesToRemove.contains(i)) {
+                continue;
+            }
+            result.add(parsed.get(i));
+        }
+
+        parsed.clear();
+        parsed.addAll(result);
     }
 
     private List<Object> tryParseNonNumberElements(String raw) {
@@ -261,23 +322,15 @@ public class MathEvaluator {
 
     private List<Vector2> toNonNumberIndexes(List<Vector2> numberIndexes, String expression) {
         List<Vector2> result = new ArrayList<>();
-        for (int i = 0; i < numberIndexes.size() - 1; i++) {
-            Vector2 numberLocation = numberIndexes.get(i);
-            Vector2 nextNumberLocation = numberIndexes.get(i + 1);
-            if (i == 0 && numberLocation.first > 0) {
-                result.add(new Vector2(0, numberLocation.first));
-                result.add(new Vector2(numberLocation.second, nextNumberLocation.first));
-                continue;
-            }
-            if (i == numberIndexes.size() - 1 && numberLocation.second < expression.length()) {
-                result.add(new Vector2(numberLocation.second, expression.length()));
-                continue;
-            } else if (i == numberIndexes.size() - 1) {
-                continue;
-            }
-            result.add(new Vector2(numberLocation.second, nextNumberLocation.first));
+        for (int i = 0; i < numberIndexes.size() + 1; i++) {
+            Vector2 prev = i - 1 >= 0 ? numberIndexes.get(i - 1) : null;
+            Vector2 next = i < numberIndexes.size() ? numberIndexes.get(i) : null;
+
+            int from = prev == null ? 0 : prev.second;
+            int to = next == null ? expression.length() : next.first;
+            result.add(new Vector2(from, to));
         }
-        return result;
+        return result.stream().distinct().toList();
     }
 
     private List<Vector2> getNumberIndexes(String expression) {
