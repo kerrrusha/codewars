@@ -2,19 +2,21 @@ package com.kerrrusha.codewars;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class MathEvaluator {
     private static final String WHITESPACE = " ";
+    private static final char OPENING_PARENTHESE_SYMBOL = '(';
+    private static final char CLOSING_PARENTHESE_SYMBOL = ')';
     private static final Pattern NUMBER_PATTERN = Pattern.compile("-?(\\d+(\\.\\d+)?)");
     private static final List<Operation> PRIORITIZED_OPERATIONS = List.of(Operation.MULTIPLY, Operation.DIVIDE);
-
+    
     public double calculate(String expression) {
         List<Object> parsed = parse(expression);
 
@@ -72,46 +74,91 @@ public class MathEvaluator {
     }
 
     private Queue<Integer> getPrioritizedOperationsIndexes(List<Object> parsed) {
-        parsed = new ArrayList<>(parsed);
-        Queue<Vector2> parentheseGroupsOrder = new LinkedList<>();
+        Deque<Vector2> parentheseGroupsOrder = getParentheseGroupsOrder(parsed);
 
+        Queue<Integer> result = new LinkedList<>();
+        while (!parentheseGroupsOrder.isEmpty()) {
+            Vector2 parentheseGroup = parentheseGroupsOrder.poll();
+            Queue<Integer> operationIndexes = getPrioritizedOperationsIndexesInRange(parsed, parentheseGroup);
+            result.addAll(operationIndexes);
+        }
+
+        return result;
+    }
+
+    private Queue<Integer> getPrioritizedOperationsIndexesInRange(List<Object> parsed, Vector2 parentheseGroup) {
+        Queue<Integer> result = new LinkedList<>();
+
+        for (int i = parentheseGroup.first; i < parentheseGroup.second; i++) {
+            Object element = parsed.get(i);
+            if (element instanceof Operation operation && PRIORITIZED_OPERATIONS.contains(operation)) {
+                int operationIndex = parsed.indexOf(element);
+                result.add(operationIndex);
+            }
+        }
+        for (int i = parentheseGroup.first; i < parentheseGroup.second; i++) {
+            Object element = parsed.get(i);
+            if (element instanceof Operation operation && !PRIORITIZED_OPERATIONS.contains(operation)) {
+                int operationIndex = parsed.indexOf(element);
+                result.add(operationIndex);
+            }
+        }
+
+        return result;
+    }
+
+    private Deque<Vector2> getParentheseGroupsOrder(List<Object> parsed) {
+        Deque<Vector2> parentheseGroupsOrder = new LinkedList<>();
+
+        int expectedGroups = getExpectedGroups(parsed);
         int prevParentheseIndex = -1;
-        while (containsParentheses(parsed)) {
-            for (Object element : parsed) {
+        while (parentheseGroupsOrder.size() < expectedGroups) {
+            for (int i = 0; i < parsed.size(); i++) {
+                if (contains(parentheseGroupsOrder, i)) {
+                    continue;
+                }
+                Object element = parsed.get(i);
                 if (!(element instanceof Parenthese parenthese)) {
                     continue;
                 }
-                if (parenthese.equals(Parenthese.OPENING)) {
+                if (parenthese.getSymbol() == OPENING_PARENTHESE_SYMBOL) {
                     prevParentheseIndex = parsed.indexOf(parenthese);
                     continue;
                 }
                 int currentParentheseIndex = parsed.indexOf(parenthese);
                 parentheseGroupsOrder.add(new Vector2(prevParentheseIndex, currentParentheseIndex));
-                remove(parsed, prevParentheseIndex, currentParentheseIndex - prevParentheseIndex + 1);
                 break;
             }
         }
 
-//        Queue<Integer> result = new LinkedList<>();
-//        for (Object element : parsed) {
-//            if (element instanceof Operation operation && PRIORITIZED_OPERATIONS.contains(operation)) {
-//                int operationIndex = parsed.indexOf(element);
-//                result.add(operationIndex);
-//            }
-//        }
-//        for (Object element : parsed) {
-//            if (element instanceof Operation operation && !PRIORITIZED_OPERATIONS.contains(operation)) {
-//                int operationIndex = parsed.indexOf(element);
-//                result.add(operationIndex);
-//            }
-//        }
-//        return result;
+        Queue<Vector2> nonParentheseGroups = getNonParentheseGroups(parentheseGroupsOrder, parsed);
+        parentheseGroupsOrder.addAll(nonParentheseGroups);
 
-        return null;
+        return parentheseGroupsOrder;
     }
 
-    private boolean containsParentheses(List<Object> parsed) {
-        return parsed.stream().anyMatch(e -> e instanceof Parenthese);
+    private Queue<Vector2> getNonParentheseGroups(Deque<Vector2> parentheseGroupsOrder, List<Object> parsed) {
+        Queue<Vector2> result = new LinkedList<>();
+
+        Vector2 lastGroup = parentheseGroupsOrder.getLast();
+        if (lastGroup.first > 0) {
+            result.add(new Vector2(0, lastGroup.first));
+        }
+        if (lastGroup.second < parsed.size()) {
+            result.add(new Vector2(lastGroup.second, parsed.size()));
+        }
+
+        return result;
+    }
+
+    private boolean contains(Queue<Vector2> parentheseGroupsOrder, int i) {
+        return parentheseGroupsOrder.stream().anyMatch(pair -> pair.first == i || pair.second == i);
+    }
+
+    private int getExpectedGroups(List<Object> parsed) {
+        return (int) (parsed.stream()
+                        .filter(e -> e instanceof Parenthese)
+                        .count() / 2);
     }
 
     private List<Object> parse(String expression) {
@@ -138,7 +185,7 @@ public class MathEvaluator {
     private List<Object> tryParseNonNumberElements(String raw) {
         return Arrays.stream(raw.replace(WHITESPACE, "").chars().toArray())
                 .mapToObj(e -> (char) e)
-                .map(ch -> (Object) (Operation.validChar(ch) ? Operation.parseChar(ch) : Parenthese.parseChar(ch)))
+                .map(ch -> Operation.validChar(ch) ? Operation.parseChar(ch) : Parenthese.parse(ch))
                 .toList();
     }
 
@@ -181,28 +228,39 @@ public class MathEvaluator {
         return result;
     }
 
-    private enum Parenthese {
-        OPENING('('),
-        CLOSING(')');
+    private interface Parenthese {
+        char getSymbol();
+        
+        static Parenthese parse(char symbol) {
+            return switch (symbol) {
+                case OPENING_PARENTHESE_SYMBOL -> new OpeningParenthese();
+                case CLOSING_PARENTHESE_SYMBOL -> new ClosingParenthese();
+                default -> throw new IllegalStateException("Unexpected value: " + symbol);
+            };
+        }
+    }
 
-        private final char symbol;
-
-        Parenthese(char symbol) {
-            this.symbol = symbol;
+    private static class OpeningParenthese implements Parenthese {
+        @Override
+        public char getSymbol() {
+            return OPENING_PARENTHESE_SYMBOL;
         }
 
-        static boolean validChar(char charToCheck) {
-            return Arrays.stream(values())
-                    .map(e -> e.symbol)
-                    .filter(ch -> ch == charToCheck)
-                    .count() == 1;
+        @Override
+        public String toString() {
+            return "" + getSymbol();
+        }
+    }
+
+    private static class ClosingParenthese implements Parenthese {
+        @Override
+        public char getSymbol() {
+            return CLOSING_PARENTHESE_SYMBOL;
         }
 
-        static Parenthese parseChar(char symbol) {
-            return Arrays.stream(values())
-                    .filter(e -> e.symbol == symbol)
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("Such Parenthese does not exists: " + symbol));
+        @Override
+        public String toString() {
+            return "" + getSymbol();
         }
     }
 
