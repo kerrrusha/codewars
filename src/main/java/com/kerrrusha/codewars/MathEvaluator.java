@@ -222,19 +222,13 @@ public class MathEvaluator {
     private void fixUnwiredOperations(List<Object> parsed) {
         for (int i = 0; i < parsed.size() - 1; i++) {
             if (parsed.get(i) instanceof OpeningParenthese && parsed.get(i + 1) instanceof SubtractOperation) {
-                System.out.println(parsed);
                 parsed.set(i + 1, -1d);
                 parsed.add(i + 2, new MultiplyOperation());
-                System.out.println(parsed);
-                System.out.println();
             }
         }
         for (int i = 0; i < parsed.size() - 1; i++) {
             if (parsed.get(i) instanceof Double && parsed.get(i + 1) instanceof Double) {
-                System.out.println(parsed);
                 parsed.add(i + 1, new AddOperation());
-                System.out.println(parsed);
-                System.out.println();
             }
         }
 
